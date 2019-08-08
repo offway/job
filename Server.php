@@ -11,7 +11,7 @@ $server->set(array(
     'task_enable_coroutine' => true,//Task工作进程支持协程
 ));
 //创建内存表
-$table = new \Swoole\Table(1024);
+$table = new \Swoole\Table(2048);//参数指定表格的最大行数
 $table->column("timerId", swoole_table::TYPE_INT, 10);
 $table->column("key", swoole_table::TYPE_STRING, 50);
 $table->create();
@@ -28,6 +28,7 @@ $server->on('connect', function ($server, $fd) {
     echo "connection open: {$fd}\n";
 });
 $server->on('receive', function ($server, $fd, $reactor_id, $data) {
+    global $table;
     $formattedData = trim(strval($data));
     $action = $formattedData;
     $jsonObj = null;
@@ -52,7 +53,25 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
                 var_dump("taskId is {$task_id}");
             }, $jsonObj["value"], $server);
             var_dump("timerId is {$id}");
+            $table->set($id, [
+                'timerId' => $id,
+                'key' => $jsonObj["key"]
+            ]);
+            var_dump($table->count());
             $server->send($fd, $id . PHP_EOL);
+            break;
+        case "del":
+            $id = $jsonObj["id"];
+            if ($table->exist($id)) {
+                $key = $table->get($id, "key");
+                $sqlite = new SQLite3("job.db");
+                $sqlite->exec("delete from job where key = {$key}");
+                $table->del($id);
+                \Swoole\Timer::clear($id);
+                $server->send($fd, "OK" . PHP_EOL);
+            } else {
+                $server->send($fd, "NOT FOUND" . PHP_EOL);
+            }
             break;
         case "jobList":
             $sqlite = new SQLite3("job.db");
@@ -75,6 +94,11 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
                     var_dump("taskId is {$task_id}");
                 }, $i, $server);
                 var_dump("timerId is {$id}");
+                $table->set($id, [
+                    'timerId' => $id,
+                    'key' => $i
+                ]);
+                var_dump($table->count());
             }
             $server->send($fd, "OK" . PHP_EOL);
             break;
