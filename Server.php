@@ -2,6 +2,15 @@
 $server = new swoole_server("127.0.0.1", 9501);
 //设置异步任务的工作进程数量
 $server->set(array('task_worker_num' => 10));
+$server->on("start", function ($server) {
+    swoole_set_process_name("JobMaster");
+});
+$server->on("managerStart", function ($server) {
+    swoole_set_process_name("JobManager");
+});
+$server->on("workerStart", function ($server, $worker_id) {
+    swoole_set_process_name("JobWorker_" . $worker_id);
+});
 $server->on('connect', function ($server, $fd) {
     echo "connection open: {$fd}\n";
 });
