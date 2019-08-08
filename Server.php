@@ -1,7 +1,12 @@
 <?php
 $server = new swoole_server("127.0.0.1", 9501);
-//设置异步任务的工作进程数量
-$server->set(array('task_worker_num' => 10));
+$server->set(array(
+    'worker_num' => 4,//设置启动的Worker进程数
+    'reactor_num' => 1,//设置主进程内事件处理线程的数量
+    'task_worker_num' => 100,//设置异步任务的工作进程数量
+    'daemonize' => 1,//守护进程化
+    'log_file' => "/home/admin/log"//指定swoole错误日志文件
+));
 $server->on("start", function ($server) {
     swoole_set_process_name("JobMaster");
 });
