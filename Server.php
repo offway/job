@@ -2,10 +2,12 @@
 $server = new swoole_server("127.0.0.1", 9501);
 $server->set(array(
     'worker_num' => 4,//设置启动的Worker进程数
-    'reactor_num' => 1,//设置主进程内事件处理线程的数量
+    'reactor_num' => 4,//设置主进程内事件处理线程的数量
     'task_worker_num' => 100,//设置异步任务的工作进程数量
     'daemonize' => 1,//守护进程化
-    'log_file' => "/home/admin/log"//指定swoole错误日志文件
+    'log_file' => "/home/admin/log",//指定swoole错误日志文件
+    'enable_coroutine' => true,//底层自动在onRequest回调中创建协程
+    'task_enable_coroutine' => true,//Task工作进程支持协程
 ));
 $server->on("start", function ($server) {
     swoole_set_process_name("JobMaster");
@@ -49,11 +51,29 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
     }
 });
 //处理异步任务
-$server->on('task', function ($serv, $task_id, $from_id, $data) {
-    sleep(1);
-    var_dump("this is job" . $data);
+$server->on('task', function ($serv, Swoole\Server\Task $task) {
+//    sleep(1);
+    var_dump("this is job" . $task->data);
+    $swoole_mysql = new Swoole\Coroutine\MySQL();
+    $swoole_mysql->connect([
+        'host' => 'rm-uf6bdv92a95017474oo.mysql.rds.aliyuncs.com',
+        'port' => 3306,
+        'user' => 'puhao',
+        'password' => 'Puhao2018',
+        'database' => 'phweb_dev',
+    ]);
+    if ($swoole_mysql->connected) {
+        $res = $swoole_mysql->query('show databases');
+        var_dump($res);
+    } else {
+        var_dump($swoole_mysql->errno);
+        var_dump($swoole_mysql->error);
+        var_dump($swoole_mysql->connect_errno);
+        var_dump($swoole_mysql->connect_error);
+    }
     //返回任务执行的结果
-    $serv->finish("$data -> OK");
+    $task->finish([123, 'hello']);
+//    $serv->finish("$data -> OK");
 });
 
 //处理异步任务的结果
