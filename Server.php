@@ -3,7 +3,7 @@ $server = new swoole_server("127.0.0.1", 9501);
 $server->set(array(
     'worker_num' => 4,//设置启动的Worker进程数
     'reactor_num' => 4,//设置主进程内事件处理线程的数量
-    'task_worker_num' => 100,//设置异步任务的工作进程数量
+    'task_worker_num' => 50,//设置异步任务的工作进程数量
     'daemonize' => 1,//守护进程化
     'log_file' => "/home/admin/log",//指定swoole错误日志文件
     'enable_coroutine' => true,//底层自动在onRequest回调中创建协程
@@ -23,12 +23,22 @@ $server->on('connect', function ($server, $fd) {
 });
 $server->on('receive', function ($server, $fd, $reactor_id, $data) {
     $formattedData = trim(strval($data));
-    switch ($formattedData) {
+    $action = $formattedData;
+    $jsonObj = null;
+    if (strpos($formattedData, "{") != false) {
+        $jsonObj = json_decode($formattedData, JSON_OBJECT_AS_ARRAY);
+        $action = $jsonObj["action"];
+    }
+    switch ($action) {
         case "":
             $server->send($fd, PHP_EOL);
             break;
         case "88":
             $server->close($fd);
+            break;
+        case "add":
+            $sqlite = new SQLite3("job.db");
+            $sqlite->exec("insert init job values({$jsonObj["key"]},{$jsonObj["value"]})");
             break;
         case "job":
             for ($i = 0; $i < 1000; $i++) {
@@ -72,13 +82,12 @@ $server->on('task', function ($serv, Swoole\Server\Task $task) {
         var_dump($swoole_mysql->connect_error);
     }
     //返回任务执行的结果
-    $task->finish([123, 'hello']);
-//    $serv->finish("$data -> OK");
+    $task->finish(true);
 });
 
 //处理异步任务的结果
 $server->on('finish', function ($serv, $task_id, $data) {
-//    echo "AsyncTask[$task_id] Finish: $data" . PHP_EOL;
+    echo "AsyncTask[$task_id] Finish: $data" . PHP_EOL;
 });
 $server->on('close', function ($server, $fd) {
     echo "connection close: {$fd}\n";

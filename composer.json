@@ -3,7 +3,9 @@
     "description": "a job container",
     "type": "project",
     "require": {
-        "swoole/ide-helper": "^4.4"
+        "swoole/ide-helper": "^4.4",
+        "ext-json": "*",
+        "ext-sqlite3": "*"
     },
     "require-dev": {
         "swoole/ide-helper": "^4.4"
