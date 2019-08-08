@@ -1,4 +1,5 @@
 <?php
+//创建socket server
 $server = new swoole_server("127.0.0.1", 9501);
 $server->set(array(
     'worker_num' => 4,//设置启动的Worker进程数
@@ -9,6 +10,11 @@ $server->set(array(
     'enable_coroutine' => true,//底层自动在onRequest回调中创建协程
     'task_enable_coroutine' => true,//Task工作进程支持协程
 ));
+//创建内存表
+$table = new \Swoole\Table(1024);
+$table->column("timerId", swoole_table::TYPE_INT, 10);
+$table->column("key", swoole_table::TYPE_STRING, 50);
+$table->create();
 $server->on("start", function ($server) {
     swoole_set_process_name("JobMaster");
 });
