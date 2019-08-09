@@ -2,8 +2,8 @@
 //创建socket server
 $server = new swoole_server("127.0.0.1", 9501);
 $server->set(array(
-    'worker_num' => 4,//设置启动的Worker进程数
-    'reactor_num' => 4,//设置主进程内事件处理线程的数量
+    'worker_num' => 1,//设置启动的Worker进程数
+    'reactor_num' => 1,//设置主进程内事件处理线程的数量
     'task_worker_num' => 50,//设置异步任务的工作进程数量
     'daemonize' => 1,//守护进程化
     'log_file' => "/home/admin/log",//指定swoole错误日志文件
@@ -18,9 +18,37 @@ $table->create();
 //创建定时器调度进程
 $process = new swoole_process(function (swoole_process $worker) {
     swoole_set_process_name("JobHolder");
+    global $server, $table;
     while (true) {
         while ($msg = $worker->pop()) {
-            //
+            $obj = json_decode($msg, JSON_OBJECT_AS_ARRAY);
+            switch ($obj["action"]) {
+                case "add":
+                    $id = \Swoole\Timer::after(20000, function ($i, $server) {
+                        //投递异步任务
+                        $task_id = $server->task($i);
+                    }, $obj["arg"], $server);
+                    $table->set($id, [
+                        'timerId' => $id,
+                        'key' => $obj["arg"]["key"]
+                    ]);
+                    break;
+                case "del":
+                    \Swoole\Timer::clear($obj["arg"]);
+                    break;
+                case "clearJob":
+                    $list = \Swoole\Timer::list();
+                    foreach ($list as $k => $v) {
+                        \Swoole\Timer::clear($k);
+                    }
+                    break;
+                case "jobInfo":
+                    $list = \Swoole\Timer::list();
+                    var_dump($list);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 }, false, SOCK_DGRAM, true);
@@ -39,7 +67,7 @@ $server->on('connect', function ($server, $fd) {
     echo "connection open: {$fd}\n";
 });
 $server->on('receive', function ($server, $fd, $reactor_id, $data) {
-    global $table;
+    global $table, $process;
     $formattedData = trim(strval($data));
     $action = $formattedData;
     $jsonObj = null;
@@ -58,18 +86,13 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
             $sqlite = new SQLite3("job.db");
             $sqlite->exec('CREATE TABLE IF NOT EXISTS job (key STRING,value STRING)');
             $sqlite->exec("insert into job values({$jsonObj["key"]},{$jsonObj["value"]})");
-            $id = \Swoole\Timer::after(20000, function ($i, $server) {
-                //投递异步任务
-                $task_id = $server->task($i);
-                var_dump("taskId is {$task_id}");
-            }, $jsonObj["value"], $server);
-            var_dump("timerId is {$id}");
-            $table->set($id, [
-                'timerId' => $id,
-                'key' => $jsonObj["key"]
-            ]);
+            $arg = [
+                "action" => "add",
+                "arg" => $jsonObj["value"]
+            ];
+            $process->push(json_encode($arg));
             var_dump($table->count());
-            $server->send($fd, $id . PHP_EOL);
+            $server->send($fd, "PUSHED" . PHP_EOL);
             break;
         case "del":
             $id = $jsonObj["id"];
@@ -78,7 +101,11 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
                 $sqlite = new SQLite3("job.db");
                 $sqlite->exec("delete from job where key = {$key}");
                 $table->del($id);
-                \Swoole\Timer::clear($id);
+                $arg = [
+                    "action" => "del",
+                    "arg" => $id
+                ];
+                $process->push(json_encode($arg));
                 $server->send($fd, "OK" . PHP_EOL);
             } else {
                 $server->send($fd, "NOT FOUND" . PHP_EOL);
@@ -91,7 +118,6 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
             while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
                 $list[] = $row;
             }
-            var_dump($list);
             $server->send($fd, json_encode($list) . PHP_EOL);
             break;
         case "testJob":
@@ -99,31 +125,30 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
             $sqlite->exec('CREATE TABLE IF NOT EXISTS job (key STRING,value STRING)');
             for ($i = 0; $i < 1000; $i++) {
                 $sqlite->exec("insert into job values({$i},'test')");
-                $id = \Swoole\Timer::after(20000, function ($i, $server) {
-                    //投递异步任务
-                    $task_id = $server->task($i);
-                    var_dump("taskId is {$task_id}");
-                }, $i, $server);
-                var_dump("timerId is {$id}");
-                $table->set($id, [
-                    'timerId' => $id,
-                    'key' => $i
-                ]);
-                var_dump($table->count());
+                $arg = [
+                    "action" => "add",
+                    "arg" => [
+                        "key" => $i
+                    ]
+                ];
+                $process->push(json_encode($arg));
             }
+            var_dump($table->count());
             $server->send($fd, "OK" . PHP_EOL);
             break;
         case "clearJob":
-            $list = \Swoole\Timer::list();
-            foreach ($list as $k => $v) {
-                \Swoole\Timer::clear($k);
-            }
+            $arg = [
+                "action" => "clearJob"
+            ];
+            $process->push(json_encode($arg));
             $server->send($fd, "OK" . PHP_EOL);
             break;
         case "jobInfo":
-            $list = \Swoole\Timer::list();
-            var_dump($list);
-            $server->send($fd, json_encode($list) . PHP_EOL);
+            $arg = [
+                "action" => "jobInfo"
+            ];
+            $process->push(json_encode($arg));
+            $server->send($fd, "OK" . PHP_EOL);
             break;
         default:
             $server->send($fd, "Unknown syntax: {$data}");
