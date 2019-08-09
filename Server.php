@@ -15,6 +15,17 @@ $table = new \Swoole\Table(2048);//参数指定表格的最大行数
 $table->column("timerId", swoole_table::TYPE_INT, 10);
 $table->column("key", swoole_table::TYPE_STRING, 50);
 $table->create();
+//创建定时器调度进程
+$process = new swoole_process(function (swoole_process $worker) {
+    swoole_set_process_name("JobHolder");
+    while (true) {
+        while ($msg = $worker->pop()) {
+            //
+        }
+    }
+}, false, SOCK_DGRAM, true);
+$process->useQueue(1, 2 | swoole_process::IPC_NOWAIT);
+$process->start();
 $server->on("start", function ($server) {
     swoole_set_process_name("JobMaster");
 });
@@ -102,6 +113,13 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
             }
             $server->send($fd, "OK" . PHP_EOL);
             break;
+        case "clearJob":
+            $list = \Swoole\Timer::list();
+            foreach ($list as $k => $v) {
+                \Swoole\Timer::clear($k);
+            }
+            $server->send($fd, "OK" . PHP_EOL);
+            break;
         case "jobInfo":
             $list = \Swoole\Timer::list();
             var_dump($list);
@@ -133,11 +151,15 @@ $server->on('task', function ($serv, Swoole\Server\Task $task) {
         var_dump($swoole_mysql->connect_error);
     }
     //返回任务执行的结果
-    $task->finish(true);
+    $task->finish($task->data);
 });
 
 //处理异步任务的结果
 $server->on('finish', function ($serv, $task_id, $data) {
+    //从sqlite 删除该条任务的记录
+    $sqlite = new SQLite3("job.db");
+    $sqlite->exec("delete from job where key = {$data['key']}");
+    //不需要去管定时器，待触发完毕会自动销毁
     echo "AsyncTask[$task_id] Finish: $data" . PHP_EOL;
 });
 $server->on('close', function ($server, $fd) {
