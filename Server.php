@@ -27,6 +27,9 @@ $process = new swoole_process(function (swoole_process $worker) {
             case "exit":
                 $worker->exit();
                 break;
+            case "kill":
+                swoole_process::kill($worker->pid);
+                break;
             case "add":
                 break;
             case "del":
@@ -48,7 +51,10 @@ swoole_process::signal(SIGCHLD, function ($sig) use ($process) {
     var_dump("signal coming...");
     swoole_event_del($process->pipe);
     swoole_process::signal(SIGCHLD, null);
-    swoole_process::wait();
+    //必须为false，非阻塞模式
+    while ($ret = swoole_process::wait(false)) {
+        echo "PID={$ret['pid']}\n";
+    }
     swoole_event::exit();
 });
 //在4.4版本中不再将信号监听作为EventLoop退出的block条件。因此在程序中如果只有信号监听的事件，进程会直接退出。
@@ -153,9 +159,16 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
             var_dump($list);
             $server->send($fd, "OK" . PHP_EOL);
             break;
-        case "killProc":
+        case "quitProc":
             $arg = [
                 "action" => "exit"
+            ];
+            $process->write(json_encode($arg));
+            $server->send($fd, "OK" . PHP_EOL);
+            break;
+        case "killProc":
+            $arg = [
+                "action" => "kill"
             ];
             $process->write(json_encode($arg));
             $server->send($fd, "OK" . PHP_EOL);
