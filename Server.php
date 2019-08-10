@@ -18,15 +18,15 @@ $table->create();
 //创建调度进程
 $process = new swoole_process(function (swoole_process $worker) {
     swoole_set_process_name("JobHolder");
-    $GLOBALS['worker'] = $worker;
-    swoole_event_add($worker->pipe, function ($pipe) {
-        $worker = $GLOBALS['worker'];
+//    $GLOBALS['worker'] = $worker;
+    swoole_event_add($worker->pipe, function ($pipe) use ($worker) {
+//        $worker = $GLOBALS['worker'];
         $data = $worker->read();
         var_dump("got msg:{$data}");
         $obj = json_decode($data, JSON_OBJECT_AS_ARRAY);
         switch ($obj["action"]) {
             case "exit":
-                $worker->exit(0);
+                $worker->exit();
                 break;
             case "add":
                 break;
@@ -45,9 +45,13 @@ $process = new swoole_process(function (swoole_process $worker) {
 //$process->useQueue(1, 2 | swoole_process::IPC_NOWAIT);
 $process->start();
 //必须注册信号SIGCHLD对退出的进程执行wait
-swoole_process::signal(SIGCHLD, function ($sig) {
+swoole_process::signal(SIGCHLD, function ($sig) use ($process) {
+    var_dump("signal coming...");
+    swoole_event_del($process->pipe);
+    swoole_process::signal(SIGCHLD, null);
+    swoole_event::exit();
     //必须为false，非阻塞模式
-    while ($ret = swoole_process::wait(false)) {
+    while ($ret = swoole_process::wait(true)) {
         var_dump($ret);
     }
 });
