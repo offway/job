@@ -25,6 +25,9 @@ $process = new swoole_process(function (swoole_process $worker) {
         var_dump("got msg:{$data}");
         $obj = json_decode($data, JSON_OBJECT_AS_ARRAY);
         switch ($obj["action"]) {
+            case "exit":
+                $worker->exit(0);
+                break;
             case "add":
                 break;
             case "del":
@@ -34,11 +37,12 @@ $process = new swoole_process(function (swoole_process $worker) {
             case "jobInfo":
                 break;
             default:
+                $worker->write("?");
                 break;
         }
     });
 }, false, SOCK_DGRAM, true);
-$process->useQueue(1, 2 | swoole_process::IPC_NOWAIT);
+//$process->useQueue(1, 2 | swoole_process::IPC_NOWAIT);
 $process->start();
 $server->on("start", function ($server) {
     swoole_set_process_name("JobMaster");
@@ -123,7 +127,7 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
                         "key" => $i
                     ]
                 ];
-                $process->push(json_encode($arg));
+                $process->write(json_encode($arg));
             }
             var_dump($table->count());
             $server->send($fd, "OK" . PHP_EOL);
@@ -138,6 +142,14 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
         case "jobInfo":
             $list = \Swoole\Timer::list();
             var_dump($list);
+            $server->send($fd, "OK" . PHP_EOL);
+            break;
+        case "testProc":
+            $arg = [
+                "action" => "exit"
+            ];
+            $process->write(json_encode($arg));
+//            var_dump($process->read());
             $server->send($fd, "OK" . PHP_EOL);
             break;
         case "a":
