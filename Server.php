@@ -11,7 +11,7 @@ $server->set(array(
     'task_enable_coroutine' => true,//Task工作进程支持协程
 ));
 //创建内存表
-$table = new \Swoole\Table(2048);//参数指定表格的最大行数
+$table = new swoole_table(2048);//参数指定表格的最大行数
 $table->column("timerId", swoole_table::TYPE_INT, 10);
 $table->column("key", swoole_table::TYPE_STRING, 50);
 $table->create();
@@ -44,6 +44,13 @@ $process = new swoole_process(function (swoole_process $worker) {
 }, false, SOCK_DGRAM, true);
 //$process->useQueue(1, 2 | swoole_process::IPC_NOWAIT);
 $process->start();
+//必须注册信号SIGCHLD对退出的进程执行wait
+swoole_process::signal(SIGCHLD, function ($sig) {
+    //必须为false，非阻塞模式
+    while ($ret = swoole_process::wait(false)) {
+        var_dump($ret);
+    }
+});
 $server->on("start", function ($server) {
     swoole_set_process_name("JobMaster");
 });
@@ -78,7 +85,7 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
             $sqlite->exec('CREATE TABLE IF NOT EXISTS job (key STRING,value STRING)');
             $sqlite->exec("insert into job values({$jsonObj["key"]},{$jsonObj["value"]})");
             //launch the timer
-            $id = \Swoole\Timer::after(20000, function ($value, $server) {
+            $id = swoole_timer::after(20000, function ($value, $server) {
                 //投递异步任务
                 $task_id = $server->task($value);
                 var_dump("task created,id:{$task_id}");
@@ -101,7 +108,7 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
                 // remove from table
                 $table->del($id);
                 // clear the timer
-                \Swoole\Timer::clear($id);
+                swoole_timer::clear($id);
                 $server->send($fd, "OK" . PHP_EOL);
             } else {
                 $server->send($fd, "NOT FOUND" . PHP_EOL);
@@ -133,40 +140,47 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
             $server->send($fd, "OK" . PHP_EOL);
             break;
         case "clearJob":
-            $list = \Swoole\Timer::list();
+            $list = swoole_timer::list();
             foreach ($list as $k => $v) {
-                \Swoole\Timer::clear($v);
+                swoole_timer::clear($v);
             }
             $server->send($fd, "OK" . PHP_EOL);
             break;
         case "jobInfo":
-            $list = \Swoole\Timer::list();
+            $list = swoole_timer::list();
             var_dump($list);
             $server->send($fd, "OK" . PHP_EOL);
             break;
-        case "testProc":
+        case "killProc":
             $arg = [
                 "action" => "exit"
             ];
             $process->write(json_encode($arg));
-//            var_dump($process->read());
+            $server->send($fd, "OK" . PHP_EOL);
+            break;
+        case "testProc":
+            $arg = [
+                "action" => "test"
+            ];
+            $process->write(json_encode($arg));
+            var_dump($process->read());
             $server->send($fd, "OK" . PHP_EOL);
             break;
         case "a":
             for ($i = 0; $i < 1000; $i++) {
-                \Swoole\Timer::after(60000, function () {
+                swoole_timer::after(60000, function () {
                     var_dump("test");
                 });
             }
             $server->send($fd, "OK" . PHP_EOL);
             break;
         case "b":
-            var_dump(\Swoole\Timer::list());
+            var_dump(swoole_timer::list());
             $server->send($fd, "OK" . PHP_EOL);
             break;
         case "c":
             for ($i = 1; $i <= 1000; $i++) {
-                \Swoole\Timer::clear($i);
+                swoole_timer::clear($i);
             }
             $server->send($fd, "OK" . PHP_EOL);
             break;
@@ -175,10 +189,10 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
     }
 });
 //处理异步任务
-$server->on('task', function ($serv, Swoole\Server\Task $task) {
+$server->on('task', function ($serv, swoole_server_task $task) {
 //    sleep(1);
     var_dump("this is job" . $task->data);
-    $swoole_mysql = new Swoole\Coroutine\MySQL();
+    $swoole_mysql = new \Co\MySQL();
     $swoole_mysql->connect([
         'host' => 'rm-uf6bdv92a95017474oo.mysql.rds.aliyuncs.com',
         'port' => 3306,
