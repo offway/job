@@ -18,9 +18,8 @@ $table->create();
 //创建调度进程
 $process = new swoole_process(function (swoole_process $worker) {
     swoole_set_process_name("JobHolder");
-//    $GLOBALS['worker'] = $worker;
+    //将管道加入到事件循环中
     swoole_event_add($worker->pipe, function ($pipe) use ($worker) {
-//        $worker = $GLOBALS['worker'];
         $data = $worker->read();
         var_dump("got msg:{$data}");
         $obj = json_decode($data, JSON_OBJECT_AS_ARRAY);
@@ -49,14 +48,11 @@ swoole_process::signal(SIGCHLD, function ($sig) use ($process) {
     var_dump("signal coming...");
     swoole_event_del($process->pipe);
     swoole_process::signal(SIGCHLD, null);
+    swoole_process::wait();
     swoole_event::exit();
-    //必须为false，非阻塞模式
-    while ($ret = swoole_process::wait(true)) {
-        var_dump($ret);
-    }
 });
 //在4.4版本中不再将信号监听作为EventLoop退出的block条件。因此在程序中如果只有信号监听的事件，进程会直接退出。
-swoole_event::wait();
+//swoole_event::wait();
 $server->on("start", function ($server) {
     swoole_set_process_name("JobMaster");
 });
