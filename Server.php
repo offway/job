@@ -51,6 +51,8 @@ swoole_process::signal(SIGCHLD, function ($sig) {
         var_dump($ret);
     }
 });
+//在4.4版本中不再将信号监听作为EventLoop退出的block条件。因此在程序中如果只有信号监听的事件，进程会直接退出。
+swoole_event::wait();
 $server->on("start", function ($server) {
     swoole_set_process_name("JobMaster");
 });
