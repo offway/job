@@ -71,7 +71,7 @@ $server->on("workerStart", function ($server, $worker_id) {
 $server->on('connect', function ($server, $fd) {
     echo "connection open: {$fd}\n";
 });
-$server->on('receive', function ($server, $fd, $reactor_id, $data) {
+$server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data) {
     global $table, $process;
     $formattedData = trim(strval($data));
     $action = $formattedData;
@@ -207,7 +207,7 @@ $server->on('receive', function ($server, $fd, $reactor_id, $data) {
 $server->on('task', function ($serv, swoole_server_task $task) {
 //    sleep(1);
     var_dump("this is job" . $task->data);
-    $swoole_mysql = new \Co\MySQL();
+    $swoole_mysql = new \Swoole\Coroutine\MySQL();
     $swoole_mysql->connect([
         'host' => 'rm-uf6bdv92a95017474oo.mysql.rds.aliyuncs.com',
         'port' => 3306,
