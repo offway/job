@@ -93,7 +93,7 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
             $sqlite->exec('CREATE TABLE IF NOT EXISTS job (key STRING,value STRING)');
             $sqlite->exec("insert into job values({$jsonObj["key"]},{$jsonObj["value"]})");
             //launch the timer
-            $id = swoole_timer::after(20000, function ($value, $server) {
+            $id = swoole_timer::after(20000, function ($value, swoole_server $server) {
                 //投递异步任务
                 $task_id = $server->task($value);
                 var_dump("task created,id:{$task_id}");
@@ -136,13 +136,17 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
             $sqlite->exec('CREATE TABLE IF NOT EXISTS job (key STRING,value STRING)');
             for ($i = 0; $i < 1000; $i++) {
                 $sqlite->exec("insert into job values({$i},'test')");
-                $arg = [
-                    "action" => "add",
-                    "arg" => [
-                        "key" => $i
-                    ]
-                ];
-                $process->write(json_encode($arg));
+                //launch the timer
+                $id = swoole_timer::after(20000, function ($value, swoole_server $server) {
+                    //投递异步任务
+                    $task_id = $server->task($value);
+                    var_dump("task created,id:{$task_id}");
+                }, $i, $server);
+                //save to table
+                $table->set($id, [
+                    'timerId' => $id,
+                    'key' => $i
+                ]);
             }
             var_dump($table->count());
             $server->send($fd, "OK" . PHP_EOL);
