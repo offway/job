@@ -81,7 +81,7 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
     $formattedData = trim(strval($data));
     $action = $formattedData;
     $jsonObj = null;//["action" => "xxxx","value" => "xxxx"]
-    if (strpos($formattedData, "{") != false) {
+    if (strpos($formattedData, "{") !== false) {
         $jsonObj = json_decode($formattedData, JSON_OBJECT_AS_ARRAY);
         $action = $jsonObj["action"];
     }
