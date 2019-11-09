@@ -136,6 +136,11 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
             }
             $server->send($fd, json_encode($list) . PHP_EOL);
             break;
+        case "jobInfo":
+            $list = swoole_timer::list();
+            var_dump($list);
+            $server->send($fd, "OK" . PHP_EOL);
+            break;
         case "testJob":
             $sqlite = new SQLite3(SQLITE_DB);
             $sqlite->exec('CREATE TABLE IF NOT EXISTS job (key STRING,value STRING,timer STRING)');
@@ -156,16 +161,14 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
             var_dump($table->count());
             $server->send($fd, "OK" . PHP_EOL);
             break;
-        case "jobInfo":
-            $list = swoole_timer::list();
-            var_dump($list);
-            $server->send($fd, "OK" . PHP_EOL);
-            break;
         case "clearJob":
+            $sqlite = new SQLite3(SQLITE_DB);
             $list = swoole_timer::list();
             foreach ($list as $k => $v) {
                 swoole_timer::clear($v);
                 $table->del($v);
+                // delete from DB
+                $sqlite->exec("delete from job where timer = {$v}");
             }
             $server->send($fd, "OK" . PHP_EOL);
             break;
