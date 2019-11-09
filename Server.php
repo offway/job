@@ -103,7 +103,8 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
                 var_dump("task created,id:{$task_id}");
             }, $obj, $server);
             //insert to DB
-            $sqlite->exec("insert into job values({$obj["key"]},{$obj["value"]},{$id})");
+            $jsonStr = json_encode($obj["value"]);
+            $sqlite->exec("insert into job values('{$obj["key"]}','{$jsonStr}',{$id})");
             //save to table
             $table->set($id, [
                 'timerId' => $id,
