@@ -120,7 +120,7 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
                 $key = $table->get($id, "key");
                 // delete from DB
                 $sqlite = new SQLite3(SQLITE_DB);
-                $sqlite->exec("delete from job where key = {$key}");
+                $sqlite->exec("delete from job where key = '{$key}'");
                 // remove from table
                 $table->del($id);
                 // clear the timer
@@ -230,8 +230,7 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
 });
 //处理异步任务
 $server->on('task', function ($serv, swoole_server_task $task) {
-//    sleep(1);
-    var_dump("this is job" . $task->data);
+    var_dump("this is job" . is_array($task->data) ? $task->data["key"] : $task->data);
     $swoole_mysql = new \Swoole\Coroutine\MySQL();
     $swoole_mysql->connect([
         'host' => 'rm-uf6bdv92a95017474oo.mysql.rds.aliyuncs.com',
@@ -250,14 +249,14 @@ $server->on('task', function ($serv, swoole_server_task $task) {
         var_dump($swoole_mysql->connect_error);
     }
     //返回任务执行的结果
-    $task->finish($task->data);
+    $task->finish(is_array($task->data) ? $task->data["key"] : $task->data);
 });
 
 //处理异步任务的结果
 $server->on('finish', function ($serv, $task_id, $data) {
     global $table;
     $sqlite = new SQLite3(SQLITE_DB);
-    $res = $sqlite->query("select * from job where key = {$data}");
+    $res = $sqlite->query("select * from job where key = '{$data}'");
     foreach ($res->fetchArray(SQLITE3_ASSOC) as $k => $v) {
         //从table 中删除
         if ($k == "timer") {
@@ -265,7 +264,7 @@ $server->on('finish', function ($serv, $task_id, $data) {
         }
     }
     //从sqlite 删除该条任务的记录
-    $sqlite->exec("delete from job where key = {$data}");
+    $sqlite->exec("delete from job where key = '{$data}'");
     //不需要去管定时器，待触发完毕会自动销毁
     echo "AsyncTask[$task_id] Finish: $data" . PHP_EOL;
 });
