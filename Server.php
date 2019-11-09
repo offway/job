@@ -16,7 +16,7 @@ $table = new swoole_table(2048);//参数指定表格的最大行数
 $table->column("timerId", swoole_table::TYPE_INT, 10);
 $table->column("key", swoole_table::TYPE_STRING, 50);
 $table->create();
-//创建调度进程
+//创建调度进程,目前单worker进程模式下没必要使用，多开workers 进程是需要的，因为 clear() 不能用于清除其他进程的定时器，只作用于当前进程
 $process = new swoole_process(function (swoole_process $worker) {
     global $server;
     swoole_set_process_name("JobHolder");
@@ -31,8 +31,6 @@ $process = new swoole_process(function (swoole_process $worker) {
                 break;
             case "kill":
                 swoole_process::kill($worker->pid);
-                break;
-            case "clearJob":
                 break;
             case "a":
                 swoole_timer::after(60000, function () {
