@@ -110,6 +110,7 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
                 'key' => $obj["key"]
             ]);
             $server->send($fd, "PUSHED" . PHP_EOL);
+            $server->close($fd);
             break;
         case "del":
             $id = $jsonObj["data"];
@@ -222,7 +223,8 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
             $server->send($fd, "OK" . PHP_EOL);
             break;
         default:
-            $server->send($fd, "Unknown syntax: {$data}");
+            $server->send($fd, "Unknown syntax: {$action}");
+            $server->close($fd);
     }
 });
 //处理异步任务
