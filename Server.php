@@ -93,25 +93,26 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
             $server->close($fd);
             break;
         case "add":
-            //insert to DB
             $sqlite = new SQLite3(SQLITE_DB);
             $sqlite->exec('CREATE TABLE IF NOT EXISTS job (key STRING,value STRING,timer STRING)');
+            $obj = $jsonObj["data"];
             //launch the timer
             $id = swoole_timer::after(20000, function ($value, swoole_server $server) {
                 //投递异步任务
                 $task_id = $server->task($value);
                 var_dump("task created,id:{$task_id}");
-            }, $jsonObj["value"], $server);
-            $sqlite->exec("insert into job values({$jsonObj["key"]},{$jsonObj["value"]},{$id})");
+            }, $obj, $server);
+            //insert to DB
+            $sqlite->exec("insert into job values({$obj["key"]},{$obj["value"]},{$id})");
             //save to table
             $table->set($id, [
                 'timerId' => $id,
-                'key' => $jsonObj["value"]["key"]
+                'key' => $obj["key"]
             ]);
             $server->send($fd, "PUSHED" . PHP_EOL);
             break;
         case "del":
-            $id = $jsonObj["id"];
+            $id = $jsonObj["data"];
             //check if exists
             if ($table->exist($id)) {
                 $key = $table->get($id, "key");
@@ -127,7 +128,7 @@ $server->on('receive', function (swoole_server $server, $fd, $reactor_id, $data)
                 $server->send($fd, "NOT FOUND" . PHP_EOL);
             }
             break;
-        case "jobList":
+        case "list":
             $sqlite = new SQLite3(SQLITE_DB);
             $res = $sqlite->query("select * from job");
             $list = [];
